@@ -13,4 +13,5 @@ wheels/
 .env
 
 # Personal resume files
-resumes/
+resumes/*
+!resumes/dummy_resume.pdf
