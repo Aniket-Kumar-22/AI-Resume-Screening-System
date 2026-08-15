@@ -305,3 +305,15 @@ for candidate in worst_2:
         "%"
     )
     print(candidate["details"])
+
+
+    """
+    uv venv
+    .\.venv\Scripts\Activate.ps1
+    
+    uv add python-dotenv
+    uv add groq
+    uv add pydantic
+    uv add pypdf
+    uv add python-docx
+    """
