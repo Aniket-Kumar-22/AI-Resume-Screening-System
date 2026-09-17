@@ -1,51 +1,94 @@
 import os 
+import streamlit as st
 from pathlib import Path
 from dotenv import load_dotenv
 from groq import Groq
 import time
 from pydantic import BaseModel
+import re
+import json
 
 load_dotenv()
-my_api_key = os.getenv("Qroq_Api_Key")
 
-if not my_api_key:
-    raise ValueError("api_error")
+api_key = os.getenv("Qroq_Api_Key")
 
-client = Groq(api_key = my_api_key)
-model = "llama-3.3-70b-versatile"
+if not api_key:
+    api_key = st.secrets["Qroq_Api_Key"]
 
-job_description ="""
-Our company needs to hire an experienced and talented Machine Learning and Artificial Intelligence (ML/AI) Engineer. This role will be crucial to the development and implementation of cutting-edge AI products. Its responsibilities will include designing and constructing sophisticated machine learning models, in addition to improving and updating existing systems. The ultimate goal is to create efficient self-learning applications that can evolve over time. If you want to be at the forefront of machine learning innovation, we hope you’ll join our team. 
+client = Groq(api_key=api_key)
 
-Typical Duties and Responsibilities
-Design machine learning systems
-Research and implement machine learning algorithms and tools
-Manage and direct research and development processes to meet the needs of our AI strategy
-Develop machine learning applications in alignment with project requirements and business goals
-Perform machine learning tests and statistical analysis in order to fine-tune the machine learning systems
-Select appropriate datasets and data representation methods
-Extend existing machine learning libraries and frameworks
-Train systems and retrain as necessary
-Work with the engineering and leadership teams on the functional design, process design, prototyping, testing, and training of AI/ML solutions
-Advise leaders on technology, strategy, and policy issues related to AI/ML
-Education
-Bachelor’s degree in computer science, mathematics, or a related field
-Required Skills and Experience
-2+ years of experience applying AI to practical uses
-Experience with deep learning, NLP, and TensorFlow
-Experience writing robust code in Python, Java, and/or R
-Experience in REST API development, NoSQL database design, and RDBMS design and optimizations
-Knowledge of basic algorithms and object-oriented and functional design principles
-Knowledge of data structures, data modeling, and software architecture
-Knowledge of math, probability, statistics, and algorithms
-Knowledge of machine learning frameworks such as Keras and PyTorch
-Knowledge of machine learning libraries such as scikit-learn
-Excellent communication skills
-Strong analytical and problem solving skills
-Preferred Qualifications
-Master’s degree in a relevant technology field
-Experience with cloud environments
-"""
+def groq_request(messages, response_format, max_retries=5):
+    for attempt in range(max_retries):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                response_format=response_format
+            )
+
+            return response
+
+        except Exception as e:
+            error_message = str(e)
+
+            if "429" not in error_message:
+                raise
+
+            # Try to extract Groq's suggested wait time
+            match = re.search(
+                r"try again in ([0-9.]+)s",
+                error_message
+            )
+
+            if match:
+                wait_time = float(match.group(1)) + 1
+            else:
+                wait_time = 10 * (attempt + 1)
+
+            print(
+                f"⚠️ Rate limit reached. "
+                f"Retrying in {wait_time:.1f} seconds..."
+            )
+
+            time.sleep(wait_time)
+
+    raise RuntimeError(
+        "Groq API rate limit exceeded after multiple retries."
+    )
+model = "openai/gpt-oss-120b"
+
+# job_description ="""   
+# Our company needs to hire an experienced and talented Machine Learning and Artificial Intelligence (ML/AI) Engineer. This role will be crucial to the development and implementation of cutting-edge AI products. Its responsibilities will include designing and constructing sophisticated machine learning models, in addition to improving and updating existing systems. The ultimate goal is to create efficient self-learning applications that can evolve over time. If you want to be at the forefront of machine learning innovation, we hope you’ll join our team. 
+
+# Typical Duties and Responsibilities
+# Design machine learning systems
+# Research and implement machine learning algorithms and tools
+# Manage and direct research and development processes to meet the needs of our AI strategy
+# Develop machine learning applications in alignment with project requirements and business goals
+# Perform machine learning tests and statistical analysis in order to fine-tune the machine learning systems
+# Select appropriate datasets and data representation methods
+# Extend existing machine learning libraries and frameworks
+# Train systems and retrain as necessary
+# Work with the engineering and leadership teams on the functional design, process design, prototyping, testing, and training of AI/ML solutions
+# Advise leaders on technology, strategy, and policy issues related to AI/ML
+# Education
+# Bachelor’s degree in computer science, mathematics, or a related field
+# Required Skills and Experience
+# 2+ years of experience applying AI to practical uses
+# Experience with deep learning, NLP, and TensorFlow
+# Experience writing robust code in Python, Java, and/or R
+# Experience in REST API development, NoSQL database design, and RDBMS design and optimizations
+# Knowledge of basic algorithms and object-oriented and functional design principles
+# Knowledge of data structures, data modeling, and software architecture
+# Knowledge of math, probability, statistics, and algorithms
+# Knowledge of machine learning frameworks such as Keras and PyTorch
+# Knowledge of machine learning libraries such as scikit-learn
+# Excellent communication skills
+# Strong analytical and problem solving skills
+# Preferred Qualifications
+# Master’s degree in a relevant technology field
+# Experience with cloud environments
+# """
 class JobD(BaseModel):
     role : str
     required_skills: list[str]
@@ -56,62 +99,135 @@ class JobD(BaseModel):
 
 jobd_schema = JobD.model_json_schema()
 
-system_prompt = f"""
-You are an expert HR assistant.
+def parse_job_description(job_text):
 
-Your job is to analyze job description and extract structured information from them.
+    system_prompt = """
+    You are an expert Job Description parser.
 
-Return ONLY valid JSON matching this schema:{jobd_schema}
+    Extract structured information from the job description.
+    Do not invent information.
+    Return valid JSON only.
+    """
 
-IMPORTANT:
-Do NOT return the schema itself.
-Do NOT return fields like "properties","title" or "type".
-Fill the schema with actual information extracted from the job description.
+    user_prompt = f"""
+    Parse the following job description:
 
-If minimum experience is not mentioned, return null.
-If information for a list is missing, return an empty list.
-Do not invent information.
-"""
+    {job_text}
 
-user_prompt = f"""
-Analyze the following job description:
-{job_description}
-"""
+    Return JSON matching this schema:
 
-message_system = {
-    "role" : "system",
-    "content" : system_prompt
-}
+    {jobd_schema}
+    """
 
-message_users = {
-    "role" : "user",
-    "content" : user_prompt
-}
-response_format ={
-    "type" : "json_object"
-}
+    message_system = {
+        "role": "system",
+        "content": system_prompt
+    }
 
-messages = [message_system, message_users]
+    message_users = {
+        "role": "user",
+        "content": user_prompt
+    }
 
-response = client.chat.completions.create(model=model, messages=messages, response_format=response_format)
+    response_format = {
+        "type": "json_object"
+    }
 
-answer = response.choices[0].message.content
+    messages = [
+        message_system,
+        message_users
+    ]
 
-raw_json = answer
+    # API call function ke andar honi chahiye
+    response = groq_request(
+        messages,
+        response_format
+    )
+
+    answer = response.choices[0].message.content
+
+    raw_json = answer
+
+    import json
+
+    job_data = json.loads(raw_json)
+
+    job = JobD(**job_data)
+
+    return job
+
+# system_prompt = f"""
+# You are an expert HR assistant.
+
+# Your job is to analyze job description and extract structured information from them.
+
+# Return ONLY valid JSON matching this schema:{jobd_schema}
+
+# IMPORTANT:
+# Do NOT return the schema itself.
+# Do NOT return fields like "properties","title" or "type".
+# Fill the schema with actual information extracted from the job description.
+
+# If minimum experience is not mentioned, return null.
+# If information for a list is missing, return an empty list.
+# Do not invent information.
+# """
+
+# user_prompt = f"""
+# Analyze the following job description:
+# {job_description}
+# """
+
+# message_system = {
+#     "role" : "system",
+#     "content" : system_prompt
+# }
+
+# message_users = {
+#     "role" : "user",
+#     "content" : user_prompt
+# }
+# response_format ={
+#     "type" : "json_object"
+# }
+
+# messages = [message_system, message_users]
+
+# response = client.chat.completions.create(model=model, messages=messages, response_format=response_format)
+
+# answer = response.choices[0].message.content
+
+# raw_json = answer
 #print(raw_json)
 
-import json
-job_data = json.loads(raw_json)
+#import json
+# job_data = json.loads(raw_json)
 
-job = JobD(**job_data)
+# job = JobD(**job_data)
 
-print(job.minimum_experience)
-print(job.education_requirements)
+# print(job.minimum_experience)
+# print(job.education_requirements)
 
 
 # Parse real
 class MatchResult(BaseModel):
     score : float
+    details: dict
+
+class ScreeningResult(BaseModel):
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+
+    total_experience_years: float | None = None
+
+    skills: list[str] = []
+    experience: list[str] = []
+    education: list[str] = []
+    projects: list[str] = []
+    certifications: list[str] = []
+
+    score: float
     details: dict
 
 class Experience(BaseModel):
@@ -135,6 +251,7 @@ class Resume(BaseModel):
     certifications: list[str] = []
 
 resume_schema = Resume.model_json_schema()
+
 def final_score(job,resume):
     match_schema = MatchResult.model_json_schema()
     prompt = f"""
@@ -170,7 +287,7 @@ def final_score(job,resume):
     response_format={
         "type": "json_object"
     }
-    response = client.chat.completions.create(model=model, messages=messages, response_format=response_format)
+    response = groq_request(messages,response_format)
     data = json.loads(response.choices[0].message.content)
     return MatchResult(**data)
 
@@ -178,7 +295,7 @@ def parse_resume(resume_text):
     system_prompt = f"""
     You are an expert resume parser.
 
-    Extract information from the resume based on its maeaning,
+    Extract information from the resume based on its meaning,
     not only based on exact section headings.
 
     Different resumes may use different headings.
@@ -221,21 +338,32 @@ def parse_resume(resume_text):
     response_format={
         "type": "json_object"
     }
-    response=client.chat.completions.create(model=model, messages=messages, response_format=response_format)
+    response = groq_request(messages,response_format)
     raw_output = response.choices[0].message.content
     data = json.loads(raw_output)
     resume = Resume(**data)
     return resume
 
+
 from pypdf import PdfReader
 from docx import Document
 def read_pdf(file_path):
     reader = PdfReader(file_path)
-    text =""
+    text = ""
+
     for page in reader.pages:
         page_text = page.extract_text()
+
         if page_text:
             text += page_text + "\n"
+
+    text = text.strip()
+
+    if not text:
+        raise ValueError(
+            "Cannot read resume: PDF contains no extractable text."
+        )
+
     return text
 
 def read_docx(file_path):
@@ -259,61 +387,23 @@ def read_resume(file_path):
     elif file_path.suffix.lower() == ".docx":
         return read_docx(file_path)
     else:
-        return None
+        raise ValueError(
+            f"Unsupported file type: {file_path.suffix}"
+        )
 
 
-resume_folder = Path("resumes")
-all_results=[]
-for file_path in resume_folder.iterdir():
-    if file_path.suffix.lower() not in [".pdf",".docx"]:
-        continue
-    print("\nProcessing:", file_path.name)
-    resume_text = read_resume(file_path)
-    parsed_text = parse_resume(resume_text)
-    time.sleep(5)
-    result = final_score(job, parsed_text)
-    time.sleep(5)
-    print("Score:",result.score)
-    all_results.append({
-        "name": parsed_text.name,
-        "score": result.score,
-        "details": result.details
-    })
-all_results.sort(
-    key=lambda candidate: candidate["score"],
-    reverse=True
-)
-top_2 = all_results[:2]
-worst_2= all_results[-2:]
-
-print("TOP 2 CANDIDATES")
-for candidate in top_2:
-    print(
-        candidate["name"],
-        "-",
-        candidate["score"],
-        "%"
-    )
-    print(candidate["details"])
-
-print("LOWEST 2 CANDIDATES")
-for candidate in worst_2:
-    print(
-        candidate["name"],
-        "-",
-        candidate["score"],
-        "%"
-    )
-    print(candidate["details"])
 
 
-    """
-    uv venv
-    .\.venv\Scripts\Activate.ps1
+
     
-    uv add python-dotenv
-    uv add groq
-    uv add pydantic
-    uv add pypdf
-    uv add python-docx
-    """
+    # uv venv
+    # .\.venv\Scripts\Activate.ps1
+    
+    # uv add python-dotenv
+    # uv add groq
+    # uv add pydantic
+    # uv add pypdf
+    # uv add python-docx
+
+    # uv run streamlit run app.py
+    
