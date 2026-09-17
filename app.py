@@ -19,7 +19,7 @@ st.set_page_config(
 
 with st.sidebar:
     st.markdown("---")
-    st.subheader("👨‍💻 Developer")
+    st.subheader("👨‍💻 Developed by-")
 
     st.write("**Aniket Kumar**")
     st.write("AI & ML Student | Aspiring AI Engineer")
