@@ -17,6 +17,24 @@ st.set_page_config(
     layout="wide"
 )
 
+with st.sidebar:
+    st.markdown("---")
+    st.subheader("👨‍💻 Developer")
+
+    st.write("**Aniket Kumar**")
+    st.write("AI & ML Student | Aspiring AI Engineer")
+
+    st.markdown(
+    "📧 [Email Me](https://mail.google.com/mail/?view=cm&fs=1&to=aniketkr2207@gmail.com)"
+    )
+    st.markdown(
+        "🔗 [LinkedIn](https://www.linkedin.com/feed/foryou/)"
+    )
+
+    st.markdown(
+        "💻 [GitHub](https://github.com/Aniket-Kumar-22)"
+    )
+
 
 st.title("📄 AI-powered Resume Screening and Candidate Ranking System")
 st.write("Upload a job description and multiple resumes to rank candidates.")
