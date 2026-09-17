@@ -11,6 +11,22 @@ An AI-powered resume screening system that parses resume data and analyzes candi
 * 🔐 Secure API-key management using environment variables
 * 🐍 Built with Python
 
+## 🚀 Live Demo
+
+Try the deployed application:
+
+👉 [Click here to use AI Resume Screening System](https://ai-resume-screening-system-kfk9edmaunfhi2tb9n7ant.streamlit.app/)
+
+The application allows users to:
+- Upload a job description
+- Upload multiple PDF/DOCX resumes
+- Extract structured resume information
+- Analyze candidate-job matching
+- Generate candidate match scores
+- Rank candidates based on job requirements
+
+
+
 ## 🛠️ Tech Stack
 
 * **Python**
